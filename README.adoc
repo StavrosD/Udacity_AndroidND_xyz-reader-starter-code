@@ -1,0 +1,15 @@
+This repository is my submission for the Udacity Android ND project "xyz-reader".
+
+The first commit is an updated version of https://github.com/udacity/xyz-reader-starter-code.git. This commit has no additional functionality, it is only updated so it can compile and run using the current versions of Android Studio and emulator.
+
+First init changelog:
+
+- Migrate to androidx
+- Update to the latest libraries
+- Remove unneeded dependencies
+- Replaced precompiled volley library (volley.jar) with 'com.android.volley:volley:1.1.1'
+- Deleted unneeded file "volley.jar"
+- Android Gradle Plugin Version -> 4.0.1
+- Gradle Version -> 6.6.1
+- Compile SDK version -> 29
+- Minor optimizations
