@@ -14,18 +14,24 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.Locale;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Html;
 import android.text.format.DateUtils;
 import android.text.method.LinkMovementMethod;
+import android.transition.TransitionInflater;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.ViewTreeObserver;
 import android.widget.ImageView;
 import android.widget.TextView;
 
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.app.ShareCompat;
 import androidx.fragment.app.Fragment;
 import androidx.loader.app.LoaderManager;
@@ -36,6 +42,9 @@ import com.android.volley.VolleyError;
 import com.android.volley.toolbox.ImageLoader;
 import com.example.xyzreader.R;
 import com.example.xyzreader.data.ArticleLoader;
+import com.example.xyzreader.databinding.FragmentArticleDetailBinding;
+
+import org.jetbrains.annotations.NotNull;
 
 /**
  * A fragment representing a single Article detail screen. This fragment is
@@ -47,10 +56,13 @@ public class ArticleDetailFragment extends Fragment implements
     private static final String TAG = "ArticleDetailFragment";
 
     public static final String ARG_ITEM_ID = "item_id";
+    public static final String ARG_ITEM_POSITION = "item_position";
+
     private static final float PARALLAX_FACTOR = 1.25f;
 
     private Cursor mCursor;
     private long mItemId;
+    private long mItemPosition;
     private View mRootView;
     private int mMutedColor = 0xFF333333;
     private ObservableScrollView mScrollView;
@@ -64,12 +76,12 @@ public class ArticleDetailFragment extends Fragment implements
     private boolean mIsCard = false;
     private int mStatusBarFullOpacityBottom;
 
-    private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.sss", Locale.getDefault());
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.sss", Locale.getDefault());
     // Use default locale format
-    private SimpleDateFormat outputFormat = new SimpleDateFormat();
+    private final SimpleDateFormat outputFormat = new SimpleDateFormat();
     // Most time functions can only handle 1902 - 2037
-    private GregorianCalendar START_OF_EPOCH = new GregorianCalendar(2,1,1);
-
+    private final GregorianCalendar START_OF_EPOCH = new GregorianCalendar(2,1,1);
+    private FragmentArticleDetailBinding binding;
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
      * fragment (e.g. upon screen orientation changes).
@@ -91,6 +103,7 @@ public class ArticleDetailFragment extends Fragment implements
 
         if (getArguments().containsKey(ARG_ITEM_ID)) {
             mItemId = getArguments().getLong(ARG_ITEM_ID);
+            mItemPosition = getArguments().getLong(ARG_ITEM_POSITION);
         }
 
         mIsCard = getResources().getBoolean(R.bool.detail_is_card);
@@ -117,9 +130,10 @@ public class ArticleDetailFragment extends Fragment implements
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        mRootView = inflater.inflate(R.layout.fragment_article_detail, container, false);
-        mDrawInsetsFrameLayout = (DrawInsetsFrameLayout)
-                mRootView.findViewById(R.id.draw_insets_frame_layout);
+        setExitTransition(TransitionInflater.from(getContext()).inflateTransition(R.transition.recyclerview_exit_transition));
+        binding = FragmentArticleDetailBinding.inflate(inflater, container, false);
+        mRootView = binding.getRoot();
+        mDrawInsetsFrameLayout = binding.drawInsetsFrameLayout;
         mDrawInsetsFrameLayout.setOnInsetsCallback(new DrawInsetsFrameLayout.OnInsetsCallback() {
             @Override
             public void onInsetsChanged(Rect insets) {
@@ -127,7 +141,7 @@ public class ArticleDetailFragment extends Fragment implements
             }
         });
 
-        mScrollView = (ObservableScrollView) mRootView.findViewById(R.id.scrollview);
+        mScrollView = binding.scrollview;
         mScrollView.setCallbacks(new ObservableScrollView.Callbacks() {
             @Override
             public void onScrollChanged() {
@@ -138,12 +152,12 @@ public class ArticleDetailFragment extends Fragment implements
             }
         });
 
-        mPhotoView = (ImageView) mRootView.findViewById(R.id.photo);
-        mPhotoContainerView = mRootView.findViewById(R.id.photo_container);
+        mPhotoView = binding.photo;
+        mPhotoContainerView = binding.photoContainer;
 
         mStatusBarColorDrawable = new ColorDrawable(0);
 
-        mRootView.findViewById(R.id.share_fab).setOnClickListener(new View.OnClickListener() {
+        binding.shareFab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startActivity(Intent.createChooser(ShareCompat.IntentBuilder.from(getActivity())
@@ -153,9 +167,32 @@ public class ArticleDetailFragment extends Fragment implements
             }
         });
 
-        bindViews();
+
+
+                bindViews();
         updateStatusBar();
+
+        // if the current fragment displays the selected item, start the transition after it is loaded
+        if (mItemId == ((ArticleDetailActivity)getActivity()).mSelectedItemId) {
+            mRootView.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+                @Override
+                public boolean onPreDraw() {
+                    mRootView.getViewTreeObserver().removeOnPreDrawListener(this);
+                    getActivity().startPostponedEnterTransition();
+                    return true;
+                }
+            });
+        }
+
         return mRootView;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            mPhotoView.setTransitionName(getString(R.string.shared_image_transition, mItemId,mItemPosition));
+        }
     }
 
     private void updateStatusBar() {
@@ -183,7 +220,6 @@ public class ArticleDetailFragment extends Fragment implements
         } else {
             return Math.min(val,max);
         }
-
     }
 
     private Date parsePublishedDate() {
@@ -202,13 +238,10 @@ public class ArticleDetailFragment extends Fragment implements
             return;
         }
 
-        TextView titleView = (TextView) mRootView.findViewById(R.id.article_title);
-        TextView bylineView = (TextView) mRootView.findViewById(R.id.article_byline);
+        TextView titleView = binding.articleTitle;
+        TextView bylineView = binding.articleByline;
         bylineView.setMovementMethod(new LinkMovementMethod());
-        TextView bodyView = (TextView) mRootView.findViewById(R.id.article_body);
-
-
-        bodyView.setTypeface(Typeface.createFromAsset(getResources().getAssets(), "Rosario-Regular.ttf"));
+        TextView bodyView = binding.articleBody;
 
         if (mCursor != null) {
             mRootView.setAlpha(0);
@@ -244,16 +277,16 @@ public class ArticleDetailFragment extends Fragment implements
                                 Palette p = Palette.from(bitmap).maximumColorCount(12).generate();
                                 mMutedColor = p.getDarkMutedColor(0xFF333333);
                                 mPhotoView.setImageBitmap(imageContainer.getBitmap());
-                                mRootView.findViewById(R.id.meta_bar)
+                                binding.metaBar
                                         .setBackgroundColor(mMutedColor);
                                 updateStatusBar();
                             }
+
                         }
 
                         @Override
                         public void onErrorResponse(VolleyError volleyError) {
-
-                        }
+                                              }
                     });
         } else {
             mRootView.setVisibility(View.GONE);
@@ -303,4 +336,5 @@ public class ArticleDetailFragment extends Fragment implements
                 ? (int) mPhotoContainerView.getTranslationY() + mPhotoView.getHeight() - mScrollY
                 : mPhotoView.getHeight() - mScrollY;
     }
+
 }
