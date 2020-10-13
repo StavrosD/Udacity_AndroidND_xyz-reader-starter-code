@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.example.xyzreader.ui.HeaderView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    >
+
+
+    <!-- Title -->
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/article_title"
+        style="@style/TextAppearance.MaterialComponents.Caption"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-condensed"
+        android:lineSpacingMultiplier="0.9"
+        android:paddingBottom="@dimen/detail_metabar_title_bottom_padding"
+        android:textColor="#fff"
+        android:textSize="@dimen/detail_title_text_size"
+        android:textStyle="bold"
+        android:paddingLeft="@dimen/padding"
+        android:paddingRight="@dimen/padding" />
+
+    <!-- Subtitle -->
+    <com.google.android.material.textview.MaterialTextView
+        android:id="@+id/article_byline"
+        style="@style/TextAppearance.AppCompat.Small"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/theme_secondary"
+        android:paddingLeft="@dimen/padding"
+        android:paddingRight="@dimen/padding" />
+
+</com.example.xyzreader.ui.HeaderView>

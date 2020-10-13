@@ -21,6 +21,7 @@ import android.transition.TransitionInflater;
 import android.transition.TransitionSet;
 import android.util.AttributeSet;
 import android.util.Log;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -46,6 +47,7 @@ import com.example.xyzreader.data.ItemsContract;
 import com.example.xyzreader.data.UpdaterService;
 import com.example.xyzreader.databinding.ActivityArticleListBinding;
 import com.example.xyzreader.databinding.ListItemArticleBinding;
+import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.snackbar.Snackbar;
 
 import org.jetbrains.annotations.NotNull;
@@ -65,7 +67,7 @@ import java.util.Map;
  * activity presents a grid of items as cards.
  */
 public class ArticleListActivity extends AppCompatActivity implements
-        LoaderManager.LoaderCallbacks<Cursor> {
+        LoaderManager.LoaderCallbacks<Cursor>, AppBarLayout.OnOffsetChangedListener  {
     private final String SAVED_TAG = "saved_tag";
     private static final String TAG = ArticleListActivity.class.toString();
     private Toolbar mToolbar;
@@ -89,7 +91,21 @@ public class ArticleListActivity extends AppCompatActivity implements
         setContentView(view);
 
         mToolbar = binding.toolbar;
+        setSupportActionBar(mToolbar);
+        getSupportActionBar().setTitle("");
 
+        binding.mainAppBarLayout.addOnOffsetChangedListener(new AppBarLayout.OnOffsetChangedListener() {
+            boolean isShow = false;
+            int scrollRange = -1;
+
+            @Override
+            public void onOffsetChanged(AppBarLayout appBarLayout, int verticalOffset) {
+                if (scrollRange == -1) {
+                    scrollRange = appBarLayout.getTotalScrollRange();
+                }
+
+            }
+        });
         mSwipeRefreshLayout = binding.swipeRefreshLayout;
 
         mRecyclerView = binding.recyclerView;
@@ -126,7 +142,12 @@ public class ArticleListActivity extends AppCompatActivity implements
         return super.onCreateView(name, context, attrs);
     }
 
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
 
+        return super.onCreateOptionsMenu(menu);
+    }
 
     private void refresh() {
         startService(new Intent(this, UpdaterService.class));
@@ -197,6 +218,10 @@ public class ArticleListActivity extends AppCompatActivity implements
         mRecyclerView.setAdapter(null);
     }
 
+    @Override
+    public void onOffsetChanged(AppBarLayout appBarLayout, int verticalOffset) {
+        mSwipeRefreshLayout.setEnabled(verticalOffset == 0);
+    }
 
 
     // ------------------------- Adapter -----------------------------------------------------------
@@ -316,39 +341,4 @@ public class ArticleListActivity extends AppCompatActivity implements
         }
     }
 
-
-    /**
-     * Scrolls the recycler view to show the last viewed item in the grid. This is important when
-     * navigating back from the grid.
-     */
-    private void scrollToPosition() {
-        /*mRecyclerView.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
-            @Override
-            public void onLayoutChange(View v,
-                                       int left,
-                                       int top,
-                                       int right,
-                                       int bottom,
-                                       int oldLeft,
-                                       int oldTop,
-                                       int oldRight,
-                                       int oldBottom) {
-                mRecyclerView.removeOnLayoutChangeListener(this);
-                final RecyclerView.LayoutManager layoutManager = mRecyclerView.getLayoutManager();
-                View viewAtPosition = layoutManager.findViewByPosition(currentPosition);
-                // Scroll to position if the view for the current position is null (not currently part of
-                // layout manager children), or it's not completely visible.
-                if (viewAtPosition == null || layoutManager
-                        .isViewPartiallyVisible(viewAtPosition, false, true)) {getFragmentManager
-                    mRecyclerView.post(new Runnable() {
-                        @Override
-                        public void run() {
-                            layoutManager.scrollToPosition(currentPosition);
-                        }
-                    });
-                }
-            }
-        });
-     &^*/
-    }
 }

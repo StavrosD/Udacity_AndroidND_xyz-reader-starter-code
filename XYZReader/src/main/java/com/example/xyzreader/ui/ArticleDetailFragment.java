@@ -3,10 +3,6 @@ package com.example.xyzreader.ui;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.Color;
-import android.graphics.Rect;
-import android.graphics.Typeface;
-import android.graphics.drawable.ColorDrawable;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -24,9 +20,9 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 
@@ -37,14 +33,16 @@ import androidx.fragment.app.Fragment;
 import androidx.loader.app.LoaderManager;
 import androidx.loader.content.Loader;
 import androidx.palette.graphics.Palette;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.ImageLoader;
 import com.example.xyzreader.R;
 import com.example.xyzreader.data.ArticleLoader;
 import com.example.xyzreader.databinding.FragmentArticleDetailBinding;
-
-import org.jetbrains.annotations.NotNull;
+import com.example.xyzreader.databinding.ParagraphBinding;
+import com.google.android.material.appbar.AppBarLayout;
 
 /**
  * A fragment representing a single Article detail screen. This fragment is
@@ -52,7 +50,7 @@ import org.jetbrains.annotations.NotNull;
  * tablets) or a {@link ArticleDetailActivity} on handsets.
  */
 public class ArticleDetailFragment extends Fragment implements
-        LoaderManager.LoaderCallbacks<Cursor> {
+        LoaderManager.LoaderCallbacks<Cursor> , AppBarLayout.OnOffsetChangedListener {
     private static final String TAG = "ArticleDetailFragment";
 
     public static final String ARG_ITEM_ID = "item_id";
@@ -65,13 +63,9 @@ public class ArticleDetailFragment extends Fragment implements
     private long mItemPosition;
     private View mRootView;
     private int mMutedColor = 0xFF333333;
-    private ObservableScrollView mScrollView;
-    private DrawInsetsFrameLayout mDrawInsetsFrameLayout;
-    private ColorDrawable mStatusBarColorDrawable;
 
-    private int mTopInset;
-    private View mPhotoContainerView;
     private ImageView mPhotoView;
+    private RecyclerView mRecyclerView;
     private int mScrollY;
     private boolean mIsCard = false;
     private int mStatusBarFullOpacityBottom;
@@ -82,6 +76,7 @@ public class ArticleDetailFragment extends Fragment implements
     // Most time functions can only handle 1902 - 2037
     private final GregorianCalendar START_OF_EPOCH = new GregorianCalendar(2,1,1);
     private FragmentArticleDetailBinding binding;
+    private ParagraphsAdapter paragraphsAdapter;
     /**
      * Mandatory empty constructor for the fragment manager to instantiate the
      * fragment (e.g. upon screen orientation changes).
@@ -105,7 +100,6 @@ public class ArticleDetailFragment extends Fragment implements
             mItemId = getArguments().getLong(ARG_ITEM_ID);
             mItemPosition = getArguments().getLong(ARG_ITEM_POSITION);
         }
-
         mIsCard = getResources().getBoolean(R.bool.detail_is_card);
         mStatusBarFullOpacityBottom = getResources().getDimensionPixelSize(
                 R.dimen.detail_card_top_margin);
@@ -133,44 +127,23 @@ public class ArticleDetailFragment extends Fragment implements
         setExitTransition(TransitionInflater.from(getContext()).inflateTransition(R.transition.recyclerview_exit_transition));
         binding = FragmentArticleDetailBinding.inflate(inflater, container, false);
         mRootView = binding.getRoot();
-        mDrawInsetsFrameLayout = binding.drawInsetsFrameLayout;
-        mDrawInsetsFrameLayout.setOnInsetsCallback(new DrawInsetsFrameLayout.OnInsetsCallback() {
-            @Override
-            public void onInsetsChanged(Rect insets) {
-                mTopInset = insets.top;
-            }
-        });
 
-        mScrollView = binding.scrollview;
-        mScrollView.setCallbacks(new ObservableScrollView.Callbacks() {
-            @Override
-            public void onScrollChanged() {
-                mScrollY = mScrollView.getScrollY();
-                getActivityCast().onUpButtonFloorChanged(mItemId, ArticleDetailFragment.this);
-                mPhotoContainerView.setTranslationY((int) (mScrollY - mScrollY / PARALLAX_FACTOR));
-                updateStatusBar();
-            }
-        });
 
         mPhotoView = binding.photo;
-        mPhotoContainerView = binding.photoContainer;
-
-        mStatusBarColorDrawable = new ColorDrawable(0);
-
+        mRecyclerView = binding.recyclerView;
         binding.shareFab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startActivity(Intent.createChooser(ShareCompat.IntentBuilder.from(getActivity())
                         .setType("text/plain")
-                        .setText("Some sample text")
+                        .setText("Share book")
                         .getIntent(), getString(R.string.action_share)));
             }
         });
 
 
 
-                bindViews();
-        updateStatusBar();
+        bindViews();
 
         // if the current fragment displays the selected item, start the transition after it is loaded
         if (mItemId == ((ArticleDetailActivity)getActivity()).mSelectedItemId) {
@@ -184,6 +157,7 @@ public class ArticleDetailFragment extends Fragment implements
             });
         }
 
+
         return mRootView;
     }
 
@@ -195,30 +169,36 @@ public class ArticleDetailFragment extends Fragment implements
         }
     }
 
-    private void updateStatusBar() {
-        int color = 0;
-        if (mPhotoView != null && mTopInset != 0 && mScrollY > 0) {
-            float f = progress(mScrollY,
-                    mStatusBarFullOpacityBottom - mTopInset * 3,
-                    mStatusBarFullOpacityBottom - mTopInset);
-            color = Color.argb((int) (255 * f),
-                    (int) (Color.red(mMutedColor) * 0.9),
-                    (int) (Color.green(mMutedColor) * 0.9),
-                    (int) (Color.blue(mMutedColor) * 0.9));
-        }
-        mStatusBarColorDrawable.setColor(color);
-        mDrawInsetsFrameLayout.setInsetBackground(mStatusBarColorDrawable);
+    @Override
+    public void onResume() {
+        super.onResume();
+        binding.fragmentAppBarLayout.addOnOffsetChangedListener(this);
     }
 
-    static float progress(float v, float min, float max) {
-        return constrain((v - min) / (max - min), 0, 1);
+    @Override
+    public void onPause() {
+        super.onPause();
+        binding.fragmentAppBarLayout.removeOnOffsetChangedListener(this);
     }
 
-    static float constrain(float val, float min, float max) {
-        if ( val < min) {
-            return min;
+    private boolean isHideToolbarView = false;
+    @Override
+    public void onOffsetChanged(AppBarLayout appBarLayout, int verticalOffset) {
+        int maxScroll = appBarLayout.getTotalScrollRange();
+        float percentage = (float) Math.abs(verticalOffset) / (float) maxScroll;
+
+        if (percentage == 1) {
+            binding.fragmentToolbarHeaderView.getRoot().setVisibility(View.VISIBLE);
+
         } else {
-            return Math.min(val,max);
+            binding.fragmentToolbarHeaderView.getRoot().setVisibility(View.GONE);
+            if (percentage >= 0.7f && isHideToolbarView) {
+                binding.floatHeaderView.articleByline.setVisibility(View.INVISIBLE);
+                isHideToolbarView = !isHideToolbarView;
+            } else if (percentage < 0.7f && !isHideToolbarView) {
+                binding.floatHeaderView.articleByline.setVisibility(View.VISIBLE);
+                isHideToolbarView = !isHideToolbarView;
+            }
         }
     }
 
@@ -238,16 +218,20 @@ public class ArticleDetailFragment extends Fragment implements
             return;
         }
 
-        TextView titleView = binding.articleTitle;
-        TextView bylineView = binding.articleByline;
+        TextView titleView = binding.floatHeaderView.articleTitle;
+        TextView fixedTitleView = binding.fragmentToolbarHeaderView.articleTitle;
+        TextView bylineView = binding.floatHeaderView.articleByline;
+        TextView fixedByLineBiew = binding.fragmentToolbarHeaderView.articleByline;
+        fixedByLineBiew.setVisibility(View.INVISIBLE);
         bylineView.setMovementMethod(new LinkMovementMethod());
-        TextView bodyView = binding.articleBody;
 
         if (mCursor != null) {
             mRootView.setAlpha(0);
             mRootView.setVisibility(View.VISIBLE);
             mRootView.animate().alpha(1);
             titleView.setText(mCursor.getString(ArticleLoader.Query.TITLE));
+            fixedTitleView.setText(titleView.getText());
+
             Date publishedDate = parsePublishedDate();
             if (!publishedDate.before(START_OF_EPOCH.getTime())) {
                 bylineView.setText(Html.fromHtml(
@@ -267,7 +251,12 @@ public class ArticleDetailFragment extends Fragment implements
                                 + "</font>"));
 
             }
-            bodyView.setText(Html.fromHtml(mCursor.getString(ArticleLoader.Query.BODY).replaceAll("(\r\n|\n)", "<br />")));
+            paragraphsAdapter = new ParagraphsAdapter(mCursor.getString(ArticleLoader.Query.BODY));
+            paragraphsAdapter.setHasStableIds(true);
+            mRecyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
+            mRecyclerView.setAdapter(paragraphsAdapter);
+
+
             ImageLoaderHelper.getInstance(getActivity()).getImageLoader()
                     .get(mCursor.getString(ArticleLoader.Query.PHOTO_URL), new ImageLoader.ImageListener() {
                         @Override
@@ -277,9 +266,7 @@ public class ArticleDetailFragment extends Fragment implements
                                 Palette p = Palette.from(bitmap).maximumColorCount(12).generate();
                                 mMutedColor = p.getDarkMutedColor(0xFF333333);
                                 mPhotoView.setImageBitmap(imageContainer.getBitmap());
-                                binding.metaBar
-                                        .setBackgroundColor(mMutedColor);
-                                updateStatusBar();
+
                             }
 
                         }
@@ -291,8 +278,9 @@ public class ArticleDetailFragment extends Fragment implements
         } else {
             mRootView.setVisibility(View.GONE);
             titleView.setText("N/A");
+            fixedTitleView.setText("N/A");
             bylineView.setText("N/A" );
-            bodyView.setText("N/A");
+
         }
     }
 
@@ -302,15 +290,15 @@ public class ArticleDetailFragment extends Fragment implements
     }
 
     @Override
-    public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
+    public void onLoadFinished(@NonNull Loader<Cursor> loader, Cursor data) {
         if (!isAdded()) {
-            if (cursor != null) {
-                cursor.close();
+            if (data != null) {
+                data.close();
             }
             return;
         }
 
-        mCursor = cursor;
+        mCursor = data;
         if (mCursor != null && !mCursor.moveToFirst()) {
             Log.e(TAG, "Error reading item detail cursor");
             mCursor.close();
@@ -320,21 +308,56 @@ public class ArticleDetailFragment extends Fragment implements
         bindViews();
     }
 
+
     @Override
-    public void onLoaderReset(Loader<Cursor> cursorLoader) {
-        mCursor = null;
-        bindViews();
+    public void onLoaderReset(@NonNull Loader<Cursor> loader) {
+        mRecyclerView.setAdapter(null);
     }
 
-    public int getUpButtonFloor() {
-        if (mPhotoContainerView == null || mPhotoView.getHeight() == 0) {
-            return Integer.MAX_VALUE;
+    // ------------------------- Adapter -----------------------------------------------------------
+
+    private class ParagraphsAdapter extends RecyclerView.Adapter<ParagraphViewHolder> {
+        private String[] paragraphs;
+
+        public ParagraphsAdapter(String bodyText) {
+            paragraphs = bodyText.split("\\r\\n\\r\\n");
         }
 
-        // account for parallax
-        return mIsCard
-                ? (int) mPhotoContainerView.getTranslationY() + mPhotoView.getHeight() - mScrollY
-                : mPhotoView.getHeight() - mScrollY;
+        @Override
+        public long getItemId(int position) {
+            return position;
+        }
+
+        @Override
+        public ParagraphViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            View view =  getLayoutInflater().inflate(R.layout.paragraph, parent, false);
+            final ParagraphViewHolder vh = new ParagraphViewHolder(view);
+            return vh;
+        }
+
+        @Override
+        public void onBindViewHolder(ParagraphViewHolder holder, int position) {
+            holder.textView.setText(paragraphs[position].replace("\r\n"," "));
+        }
+
+        @Override
+        public int getItemCount() {
+            return paragraphs.length;
+        }
     }
+
+    public static class ParagraphViewHolder extends RecyclerView.ViewHolder {
+        public TextView textView;
+
+        public ParagraphViewHolder(View view) {
+            super(view);
+            ParagraphBinding binding = ParagraphBinding.bind(view);
+            textView = binding.paragraph;
+        }
+    }
+    // ---------------------------------- Adapter end ----------------------------------------------
+
+
+
 
 }

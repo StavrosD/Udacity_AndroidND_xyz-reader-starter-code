@@ -10,13 +10,13 @@
     <FrameLayout
         android:id="@+id/up_container"
         android:layout_width="match_parent"
-        android:layout_height="?actionBarSize"
+        android:layout_height="@dimen/action_bar_size"
         android:background="@android:color/transparent">
 
         <ImageButton
             android:id="@+id/action_up"
             android:layout_width="56dp"
-            android:layout_height="?actionBarSize"
+            android:layout_height="match_parent"
             android:background="?selectableItemBackgroundBorderless"
             android:contentDescription="@string/up"
             android:src="@drawable/ic_arrow_back"
