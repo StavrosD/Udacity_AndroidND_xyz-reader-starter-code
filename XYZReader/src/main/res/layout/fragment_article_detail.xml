@@ -23,7 +23,7 @@
             app:contentScrim="@color/theme_primary"
             app:scrimAnimationDuration="300">
 
-            <ImageView
+            <com.android.volley.toolbox.NetworkImageView
                 android:id="@+id/photo"
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/detail_card_top_margin"

@@ -4,19 +4,18 @@ import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
 import android.os.Bundle;
-import android.transition.Transition;
-import android.transition.TransitionInflater;
 import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentStatePagerAdapter;
-import androidx.fragment.app.FragmentTransaction;
 import androidx.loader.app.LoaderManager;
 import androidx.loader.content.Loader;
 import androidx.viewpager.widget.ViewPager;
@@ -25,7 +24,6 @@ import com.example.xyzreader.R;
 import com.example.xyzreader.data.ArticleLoader;
 import com.example.xyzreader.data.ItemsContract;
 import com.example.xyzreader.databinding.ActivityArticleDetailBinding;
-import com.google.android.material.appbar.AppBarLayout;
 
 
 /**
@@ -33,6 +31,7 @@ import com.google.android.material.appbar.AppBarLayout;
  */
 public class ArticleDetailActivity extends AppCompatActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
+    public static final String EXTRA_POSITION = "position";
 
     private Cursor mCursor;
     private long mStartId;
@@ -46,16 +45,20 @@ public class ArticleDetailActivity extends AppCompatActivity
     private View mUpButtonContainer;
     private View mUpButton;
     private ActivityArticleDetailBinding binding;
+    private int SelectedIndex;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            ActivityCompat.postponeEnterTransition(this);
 
+        }
         super.onCreate(savedInstanceState);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
                             View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-            postponeEnterTransition();
+            ActivityCompat.postponeEnterTransition(this);
         }
         binding = ActivityArticleDetailBinding.inflate(getLayoutInflater());
         View view = binding.getRoot();
@@ -122,7 +125,29 @@ public class ArticleDetailActivity extends AppCompatActivity
                 mSelectedItemId = mStartId;
             }
         }
+        mPager.addOnPageChangeListener(PageChangeListener);
+        mPager.getViewTreeObserver().addOnGlobalLayoutListener(PagerLayoutListener);
+
     }
+
+    private ViewPager.OnPageChangeListener PageChangeListener = new ViewPager.OnPageChangeListener() {
+        @Override
+        public void onPageScrolled(int position, float positionOffset, int positionOffsetPixels) {
+
+        }
+
+        @Override
+        public void onPageSelected(int position) {
+            SelectedIndex = position;
+        }
+
+        @Override
+        public void onPageScrollStateChanged(int state) {
+        }
+    };
+
+
+
 
     @Override
     public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
@@ -156,12 +181,13 @@ public class ArticleDetailActivity extends AppCompatActivity
         mPagerAdapter.notifyDataSetChanged();
     }
 
-    public void onUpButtonFloorChanged(long itemId, ArticleDetailFragment fragment) {
-        if (itemId == mSelectedItemId) {
-           // mSelectedItemUpButtonFloor = fragment.getUpButtonFloor();
-            updateUpButtonPosition();
+    private ViewTreeObserver.OnGlobalLayoutListener PagerLayoutListener = new ViewTreeObserver.OnGlobalLayoutListener() {
+        @Override
+        public void onGlobalLayout() {
+            mPager.getViewTreeObserver().removeOnGlobalLayoutListener(PagerLayoutListener);
+            ActivityCompat.startPostponedEnterTransition(ArticleDetailActivity.this);
         }
-    }
+    };
 
     private void updateUpButtonPosition() {
         int upButtonNormalBottom = mTopInset + mUpButton.getHeight();
@@ -170,6 +196,7 @@ public class ArticleDetailActivity extends AppCompatActivity
 
     @Override
     public void onBackPressed() {
+    //    supportFinishAfterTransition();
         finish();
     }
 
@@ -206,40 +233,17 @@ public class ArticleDetailActivity extends AppCompatActivity
         public int getCount() {
             return (mCursor != null) ? mCursor.getCount() : 0;
         }
+
+        public View getCurrentView(ViewPager pager) {
+            for (int i=0; i<pager.getChildCount(); i++) {
+                if (pager.getChildAt(i).getTag(R.id.index).equals(pager.getCurrentItem())) {
+                    return pager.getChildAt(i);
+                }
+            }
+
+            return null;
+        }
     }
     // --------------------------------- MyPagerAdapter end --------------------------------
 
-    /**
-     * Prepares the shared element transition from and back to the grid fragment.
-
-    private void prepareSharedElementTransition() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-
-            Transition transition =
-                    TransitionInflater.from(this)
-                            .inflateTransition(R.transition.image_transition);
-            setSharedElementEnterTransition(transition);
-
-            // A similar mapping is set at the GridFragment with a setExitSharedElementCallback.
-            setEnterSharedElementCallback(
-                    new SharedElementCallback() {
-                        @Override
-                        public void onMapSharedElements(List<String> names, Map<String, View> sharedElements) {
-                            // Locate the image view at the primary fragment (the ImageFragment that is currently
-                            // visible). To locate the fragment, call instantiateItem with the selection position.
-                            // At this stage, the method will simply return the fragment at the position and will
-                            // not create a new one.
-                            Fragment currentFragment = (Fragment) viewPager.getAdapter()
-                                    .instantiateItem(viewPager, MainActivity.currentPosition);
-                            View view = currentFragment.getView();
-                            if (view == null) {
-                                return;
-                            }
-
-                            // Map the first shared element name to the child ImageView.
-                            sharedElements.put(names.get(0), view.findViewById(R.id.image));
-                        }
-                    });
-        }
-     }*/
 }

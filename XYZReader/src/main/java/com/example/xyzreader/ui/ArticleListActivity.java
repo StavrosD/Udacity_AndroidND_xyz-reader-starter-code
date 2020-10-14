@@ -1,5 +1,7 @@
 package com.example.xyzreader.ui;
 
+import android.annotation.SuppressLint;
+import android.app.ActivityOptions;
 import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -12,29 +14,30 @@ import android.net.NetworkCapabilities;
 import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Bundle;
-
 import android.os.Parcelable;
 import android.os.PersistableBundle;
 import android.text.Html;
 import android.text.format.DateUtils;
-import android.transition.TransitionInflater;
-import android.transition.TransitionSet;
+import android.transition.ChangeBounds;
+import android.transition.ChangeImageTransform;
+import android.transition.Transition;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
+import android.view.Window;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.app.ActivityCompat;
 import androidx.core.app.ActivityOptionsCompat;
 import androidx.core.app.SharedElementCallback;
-import androidx.core.view.ViewCompat;
 import androidx.loader.app.LoaderManager;
+import androidx.loader.app.LoaderManager.LoaderCallbacks;
 import androidx.loader.content.Loader;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.recyclerview.widget.StaggeredGridLayoutManager;
@@ -49,6 +52,7 @@ import com.example.xyzreader.databinding.ActivityArticleListBinding;
 import com.example.xyzreader.databinding.ListItemArticleBinding;
 import com.google.android.material.appbar.AppBarLayout;
 import com.google.android.material.snackbar.Snackbar;
+import com.google.android.material.textview.MaterialTextView;
 
 import org.jetbrains.annotations.NotNull;
 
@@ -67,7 +71,7 @@ import java.util.Map;
  * activity presents a grid of items as cards.
  */
 public class ArticleListActivity extends AppCompatActivity implements
-        LoaderManager.LoaderCallbacks<Cursor>, AppBarLayout.OnOffsetChangedListener  {
+        LoaderCallbacks<Cursor>, AppBarLayout.OnOffsetChangedListener  {
     private final String SAVED_TAG = "saved_tag";
     private static final String TAG = ArticleListActivity.class.toString();
     private Toolbar mToolbar;
@@ -80,11 +84,15 @@ public class ArticleListActivity extends AppCompatActivity implements
     private GregorianCalendar START_OF_EPOCH = new GregorianCalendar(2,1,1);
     private ActivityArticleListBinding binding;
     private static final String KEY_CURRENT_POSITION = "com.example.xyzreader.key.currentPosition";
-
+    private int currentPosition;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            ActivityCompat.setExitSharedElementCallback(this, ExitTransitionCallback);
+            getWindow().requestFeature(Window.FEATURE_ACTIVITY_TRANSITIONS);
+            getWindow().setSharedElementEnterTransition(new ChangeImageTransform());
+        }
         super.onCreate(savedInstanceState);
-        //postponeEnterTransition();
 
         binding = ActivityArticleListBinding.inflate(getLayoutInflater());
         View view = binding.getRoot();
@@ -125,16 +133,31 @@ public class ArticleListActivity extends AppCompatActivity implements
 
         if (savedInstanceState == null) {
             refresh();
-        } else {
-            mRecyclerView.getLayoutManager().onRestoreInstanceState(savedInstanceState.getParcelable(SAVED_TAG));
-            //currentPosition = savedInstanceState.getInt(KEY_CURRENT_POSITION, 0);
 
         }
 
         if (!isNetworkAvailable(getApplication())) {
             Snackbar.make(binding.getRoot(), R.string.error_text_label, Snackbar.LENGTH_LONG).show();
         }
+
     }
+
+    private final SharedElementCallback ExitTransitionCallback = new SharedElementCallback() {
+        @SuppressLint("NewApi")
+        @Override
+        public void onMapSharedElements(List<String> names, Map<String, View> sharedElements) {
+
+                // Locate the ViewHolder for the clicked position.
+                RecyclerView.ViewHolder selectedViewHolder = mRecyclerView.findViewHolderForAdapterPosition(currentPosition);
+                if (selectedViewHolder == null || selectedViewHolder.itemView == null) {
+                    return;
+                }
+
+                // Map the first shared element name to the child ImageView.
+                sharedElements.put(names.get(0),selectedViewHolder.itemView.findViewById(R.id.thumbnail));
+            }
+
+    };
 
     @Nullable
     @Override
@@ -153,44 +176,64 @@ public class ArticleListActivity extends AppCompatActivity implements
         startService(new Intent(this, UpdaterService.class));
     }
 
+    private boolean mIsRefreshing = false;
+    private BroadcastReceiver mRefreshingReceiver;
+
     @Override
     protected void onStart() {
         super.onStart();
-        registerReceiver(mRefreshingReceiver,
-                new IntentFilter(UpdaterService.BROADCAST_ACTION_STATE_CHANGE));
+        if (mRefreshingReceiver == null) {
+            mIsRefreshing = true;
+             mRefreshingReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    if (UpdaterService.BROADCAST_ACTION_STATE_CHANGE.equals(intent.getAction())) {
+                        mIsRefreshing = intent.getBooleanExtra(UpdaterService.EXTRA_REFRESHING, false);
+                        updateRefreshingUI();
+                    }
+                }
+            };
+            registerReceiver(mRefreshingReceiver,
+                    new IntentFilter(UpdaterService.BROADCAST_ACTION_STATE_CHANGE));
+
+            updateRefreshingUI();
+        }
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        unregisterReceiver(mRefreshingReceiver);
+        if (mRefreshingReceiver != null) {
+            try {
+                unregisterReceiver(mRefreshingReceiver);
+            } catch (Exception ex) {
+                Log.e("mRefreshingReceiver", ex.getMessage());
+            }
+
+            mRefreshingReceiver = null;
+        }
     }
+
+
 
     @Override
     public void onSaveInstanceState(@NonNull @NotNull Bundle outState) {
+        super.onSaveInstanceState(outState);
         if (mRecyclerView.getLayoutManager() != null) {
             Parcelable recyclerviewData = mRecyclerView.getLayoutManager().onSaveInstanceState();
             if (recyclerviewData != null) {
                 outState.putParcelable(SAVED_TAG, recyclerviewData);
             }
         }
-//        outState.putInt(KEY_CURRENT_POSITION, currentPosition);
-
-        super.onSaveInstanceState(outState);
-
+        outState.putInt(KEY_CURRENT_POSITION, currentPosition);
     }
 
-    private boolean mIsRefreshing = false;
-
-    private BroadcastReceiver mRefreshingReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (UpdaterService.BROADCAST_ACTION_STATE_CHANGE.equals(intent.getAction())) {
-                mIsRefreshing = intent.getBooleanExtra(UpdaterService.EXTRA_REFRESHING, false);
-                updateRefreshingUI();
-            }
-        }
-    };
+    @Override
+    public void onRestoreInstanceState(@Nullable Bundle savedInstanceState, @Nullable PersistableBundle persistentState) {
+        super.onRestoreInstanceState(savedInstanceState, persistentState);
+        mRecyclerView.getLayoutManager().onRestoreInstanceState(savedInstanceState.getParcelable(SAVED_TAG));
+        currentPosition = savedInstanceState.getInt(KEY_CURRENT_POSITION, 0);
+    }
 
     private void updateRefreshingUI() {
         mSwipeRefreshLayout.setRefreshing(mIsRefreshing);
@@ -203,7 +246,7 @@ public class ArticleListActivity extends AppCompatActivity implements
 
     @Override
     public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
-        Adapter adapter = new Adapter(cursor);
+        RecyclerViewAdapter adapter = new RecyclerViewAdapter(cursor);
         adapter.setHasStableIds(true);
         mRecyclerView.setAdapter(adapter);
         int columnCount = getResources().getInteger(R.integer.list_column_count);
@@ -226,10 +269,10 @@ public class ArticleListActivity extends AppCompatActivity implements
 
     // ------------------------- Adapter -----------------------------------------------------------
 
-    private class Adapter extends RecyclerView.Adapter<ViewHolder> {
+    private class RecyclerViewAdapter extends RecyclerView.Adapter<ViewHolder> {
         private Cursor mCursor;
 
-        public Adapter(Cursor cursor) {
+        public RecyclerViewAdapter(Cursor cursor) {
             mCursor = cursor;
         }
 
@@ -246,20 +289,23 @@ public class ArticleListActivity extends AppCompatActivity implements
             view.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-
+                    currentPosition = vh.getAdapterPosition();
                     ListItemArticleBinding binding = ListItemArticleBinding.bind(view);
-                    Intent intent = new Intent(Intent.ACTION_VIEW, ItemsContract.Items.buildItemUri(getItemId(vh.getAdapterPosition())));
+                    Intent intent = new Intent(Intent.ACTION_VIEW, ItemsContract.Items.buildItemUri(getItemId(currentPosition)));
+                    intent.putExtra(ArticleDetailActivity.EXTRA_POSITION, currentPosition);
+                    //intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(ArticleListActivity.this, binding.thumbnail, binding.thumbnail.getTransitionName());
 
-                        startActivityForResult(intent, 1,options.toBundle());
+                        ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(ArticleListActivity.this, binding.thumbnail, binding.thumbnail.getTransitionName());
+                        startActivity( intent,options.toBundle());
                     } else {
-                        startActivityForResult(intent,1);
+                        startActivity( intent);
                     }
                 }
             });
             return vh;
+
         }
 
         private Date parsePublishedDate() {
@@ -297,7 +343,6 @@ public class ArticleListActivity extends AppCompatActivity implements
             holder.thumbnailView.setImageUrl(
                     mCursor.getString(ArticleLoader.Query.THUMB_URL),
                     ImageLoaderHelper.getInstance(ArticleListActivity.this).getImageLoader());
-            holder.thumbnailView.setAspectRatio(mCursor.getFloat(ArticleLoader.Query.ASPECT_RATIO));
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 holder.thumbnailView.setTransitionName(getString(R.string.shared_image_transition, getItemId(position),position));   // set a unique Transition Name, using the item ID. I prepend a string to be sure that there will not be any other elements with the same transition name in case I use this code in another larger project
@@ -311,9 +356,9 @@ public class ArticleListActivity extends AppCompatActivity implements
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
-        public DynamicHeightNetworkImageView thumbnailView;
-        public TextView titleView;
-        public TextView subtitleView;
+        public NetworkImageView thumbnailView;
+        public MaterialTextView titleView;
+        public MaterialTextView subtitleView;
 
         public ViewHolder(View view) {
             super(view);

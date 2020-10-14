@@ -3,32 +3,23 @@ package com.example.xyzreader.ui;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.GregorianCalendar;
-import java.util.Locale;
-
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Html;
 import android.text.format.DateUtils;
 import android.text.method.LinkMovementMethod;
+import android.transition.Transition;
 import android.transition.TransitionInflater;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewTreeObserver;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
-import android.widget.TextView;
-
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.app.ActivityCompat;
 import androidx.core.app.ShareCompat;
+import androidx.core.app.SharedElementCallback;
 import androidx.fragment.app.Fragment;
 import androidx.loader.app.LoaderManager;
 import androidx.loader.content.Loader;
@@ -38,11 +29,21 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.android.volley.VolleyError;
 import com.android.volley.toolbox.ImageLoader;
+import com.android.volley.toolbox.NetworkImageView;
 import com.example.xyzreader.R;
 import com.example.xyzreader.data.ArticleLoader;
 import com.example.xyzreader.databinding.FragmentArticleDetailBinding;
 import com.example.xyzreader.databinding.ParagraphBinding;
 import com.google.android.material.appbar.AppBarLayout;
+import com.google.android.material.textview.MaterialTextView;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.GregorianCalendar;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * A fragment representing a single Article detail screen. This fragment is
@@ -56,19 +57,13 @@ public class ArticleDetailFragment extends Fragment implements
     public static final String ARG_ITEM_ID = "item_id";
     public static final String ARG_ITEM_POSITION = "item_position";
 
-    private static final float PARALLAX_FACTOR = 1.25f;
-
     private Cursor mCursor;
     private long mItemId;
     private long mItemPosition;
     private View mRootView;
-    private int mMutedColor = 0xFF333333;
 
-    private ImageView mPhotoView;
+    private NetworkImageView mPhotoView;
     private RecyclerView mRecyclerView;
-    private int mScrollY;
-    private boolean mIsCard = false;
-    private int mStatusBarFullOpacityBottom;
 
     private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.sss", Locale.getDefault());
     // Use default locale format
@@ -95,16 +90,27 @@ public class ArticleDetailFragment extends Fragment implements
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            ActivityCompat.setEnterSharedElementCallback(getActivity(), EnterTransitionCallback);
 
+        }
+        getActivity().getWindow().setSharedElementExitTransition(TransitionInflater.from(getActivity()).inflateTransition(R.transition.shared_image_transition));
+        Transition transition = TransitionInflater.from(this.getContext()).inflateTransition(R.transition.shared_image_transition);
+        setSharedElementEnterTransition(transition);
         if (getArguments().containsKey(ARG_ITEM_ID)) {
             mItemId = getArguments().getLong(ARG_ITEM_ID);
             mItemPosition = getArguments().getLong(ARG_ITEM_POSITION);
         }
-        mIsCard = getResources().getBoolean(R.bool.detail_is_card);
-        mStatusBarFullOpacityBottom = getResources().getDimensionPixelSize(
-                R.dimen.detail_card_top_margin);
         setHasOptionsMenu(true);
     }
+
+    private final SharedElementCallback EnterTransitionCallback = new SharedElementCallback() {
+        @Override
+        public void onMapSharedElements(List<String> names, Map<String, View> sharedElements) {
+               // sharedElements.put(names.get(0), binding.photo);
+
+        }
+    };
 
     public ArticleDetailActivity getActivityCast() {
         return (ArticleDetailActivity) getActivity();
@@ -144,10 +150,10 @@ public class ArticleDetailFragment extends Fragment implements
 
 
         bindViews();
-
+/*
         // if the current fragment displays the selected item, start the transition after it is loaded
         if (mItemId == ((ArticleDetailActivity)getActivity()).mSelectedItemId) {
-            mRootView.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            mRootView.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserveimager.OnPreDrawListener() {
                 @Override
                 public boolean onPreDraw() {
                     mRootView.getViewTreeObserver().removeOnPreDrawListener(this);
@@ -156,7 +162,7 @@ public class ArticleDetailFragment extends Fragment implements
                 }
             });
         }
-
+*/
 
         return mRootView;
     }
@@ -166,6 +172,7 @@ public class ArticleDetailFragment extends Fragment implements
         super.onViewCreated(view, savedInstanceState);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             mPhotoView.setTransitionName(getString(R.string.shared_image_transition, mItemId,mItemPosition));
+      //      ActivityCompat.startPostponedEnterTransition(getActivity());
         }
     }
 
@@ -218,10 +225,10 @@ public class ArticleDetailFragment extends Fragment implements
             return;
         }
 
-        TextView titleView = binding.floatHeaderView.articleTitle;
-        TextView fixedTitleView = binding.fragmentToolbarHeaderView.articleTitle;
-        TextView bylineView = binding.floatHeaderView.articleByline;
-        TextView fixedByLineBiew = binding.fragmentToolbarHeaderView.articleByline;
+        MaterialTextView titleView = binding.floatHeaderView.articleTitle;
+        MaterialTextView fixedTitleView = binding.fragmentToolbarHeaderView.articleTitle;
+        MaterialTextView bylineView = binding.floatHeaderView.articleByline;
+        MaterialTextView fixedByLineBiew = binding.fragmentToolbarHeaderView.articleByline;
         fixedByLineBiew.setVisibility(View.INVISIBLE);
         bylineView.setMovementMethod(new LinkMovementMethod());
 
@@ -257,23 +264,27 @@ public class ArticleDetailFragment extends Fragment implements
             mRecyclerView.setAdapter(paragraphsAdapter);
 
 
+            mPhotoView.setImageUrl(
+                    mCursor.getString(ArticleLoader.Query.PHOTO_URL),
+                    ImageLoaderHelper.getInstance(getActivity()).getImageLoader());
             ImageLoaderHelper.getInstance(getActivity()).getImageLoader()
                     .get(mCursor.getString(ArticleLoader.Query.PHOTO_URL), new ImageLoader.ImageListener() {
                         @Override
                         public void onResponse(ImageLoader.ImageContainer imageContainer, boolean b) {
                             Bitmap bitmap = imageContainer.getBitmap();
                             if (bitmap != null) {
-                                Palette p = Palette.from(bitmap).maximumColorCount(12).generate();
-                                mMutedColor = p.getDarkMutedColor(0xFF333333);
-                                mPhotoView.setImageBitmap(imageContainer.getBitmap());
+                                Palette p = Palette.from(bitmap).maximumColorCount(6).generate();
+                                binding.collapsingToolbar.setStatusBarScrimColor(p.getDominantColor(getResources().getColor( R.color.theme_primary)));
+                                binding.collapsingToolbar.setContentScrimColor(p.getDominantColor(getResources().getColor( R.color.theme_primary)));
+                                binding.collapsingToolbar.setBackgroundColor(p.getDominantColor(getResources().getColor( R.color.theme_primary)));
 
                             }
-
                         }
 
                         @Override
                         public void onErrorResponse(VolleyError volleyError) {
-                                              }
+
+                        }
                     });
         } else {
             mRootView.setVisibility(View.GONE);
@@ -347,7 +358,7 @@ public class ArticleDetailFragment extends Fragment implements
     }
 
     public static class ParagraphViewHolder extends RecyclerView.ViewHolder {
-        public TextView textView;
+        public MaterialTextView textView;
 
         public ParagraphViewHolder(View view) {
             super(view);

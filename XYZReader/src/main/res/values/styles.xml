@@ -26,9 +26,14 @@
         <item name="android:colorBackground">@color/ltgray</item>
         <item name="fontFamily">@font/roboto</item>
         <item name="android:fontFamily">@font/roboto</item>
+
         <item name="android:windowContentTransitions">true</item>
         <item name="android:windowSharedElementEnterTransition">@transition/shared_image_transition</item>
         <item name="android:windowSharedElementExitTransition">@transition/shared_image_transition</item>
+        <item name="android:windowEnterTransition">@transition/recyclerview_exit_transition</item>
+        <item name="android:windowExitTransition">@transition/recyclerview_exit_transition</item>
+        <item name="android:windowAllowEnterTransitionOverlap">true</item>
+        <item name="android:windowAllowReturnTransitionOverlap">true</item>
     </style>
 
     <style name="Theme.Bacon.Detail">
