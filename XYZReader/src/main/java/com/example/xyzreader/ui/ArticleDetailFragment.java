@@ -3,6 +3,7 @@ package com.example.xyzreader.ui;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Html;
@@ -20,6 +21,7 @@ import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.ShareCompat;
 import androidx.core.app.SharedElementCallback;
+import androidx.core.graphics.ColorUtils;
 import androidx.fragment.app.Fragment;
 import androidx.loader.app.LoaderManager;
 import androidx.loader.content.Loader;
@@ -171,8 +173,10 @@ public class ArticleDetailFragment extends Fragment implements
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            mPhotoView.setTransitionName(getString(R.string.shared_image_transition, mItemId,mItemPosition));
-      //      ActivityCompat.startPostponedEnterTransition(getActivity());
+            mPhotoView.setTransitionName(getString(R.string.shared_image_transition, mItemId));
+            if (((ArticleDetailActivity) getActivity()).mStartId == mItemId) {
+              //  ActivityCompat.startPostponedEnterTransition(getActivity());
+            }
         }
     }
 
@@ -267,16 +271,24 @@ public class ArticleDetailFragment extends Fragment implements
             mPhotoView.setImageUrl(
                     mCursor.getString(ArticleLoader.Query.PHOTO_URL),
                     ImageLoaderHelper.getInstance(getActivity()).getImageLoader());
+            mPhotoView.setTransitionName(getString(R.string.shared_image_transition,ArticleLoader.Query._ID));
             ImageLoaderHelper.getInstance(getActivity()).getImageLoader()
                     .get(mCursor.getString(ArticleLoader.Query.PHOTO_URL), new ImageLoader.ImageListener() {
                         @Override
                         public void onResponse(ImageLoader.ImageContainer imageContainer, boolean b) {
                             Bitmap bitmap = imageContainer.getBitmap();
                             if (bitmap != null) {
-                                Palette p = Palette.from(bitmap).maximumColorCount(6).generate();
+                                Palette p = Palette.from(bitmap).maximumColorCount(16).generate();
                                 binding.collapsingToolbar.setStatusBarScrimColor(p.getDominantColor(getResources().getColor( R.color.theme_primary)));
                                 binding.collapsingToolbar.setContentScrimColor(p.getDominantColor(getResources().getColor( R.color.theme_primary)));
                                 binding.collapsingToolbar.setBackgroundColor(p.getDominantColor(getResources().getColor( R.color.theme_primary)));
+                                float[] backColor = p.getDominantSwatch().getHsl();
+
+                                // keep the background bright, otherwise the black text will be difficult to read
+                                backColor[2] = (float)0.96; // increase the value for brighter background.  0 < l < 1
+
+                                // set the background color tone to match the image color
+                                 mRecyclerView.setBackgroundColor(ColorUtils.HSLToColor(backColor));
 
                             }
                         }
@@ -286,13 +298,14 @@ public class ArticleDetailFragment extends Fragment implements
 
                         }
                     });
+            mRootView.setTag(R.id.index,mItemPosition);
         } else {
             mRootView.setVisibility(View.GONE);
             titleView.setText("N/A");
             fixedTitleView.setText("N/A");
             bylineView.setText("N/A" );
-
         }
+
     }
 
     @Override

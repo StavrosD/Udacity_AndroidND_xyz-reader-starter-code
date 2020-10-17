@@ -1,5 +1,6 @@
 package com.example.xyzreader.ui;
 
+import android.annotation.SuppressLint;
 import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Build;
@@ -13,6 +14,7 @@ import android.view.WindowInsets;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.app.SharedElementCallback;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentStatePagerAdapter;
@@ -24,6 +26,9 @@ import com.example.xyzreader.R;
 import com.example.xyzreader.data.ArticleLoader;
 import com.example.xyzreader.data.ItemsContract;
 import com.example.xyzreader.databinding.ActivityArticleDetailBinding;
+import com.example.xyzreader.databinding.FragmentArticleDetailBinding;
+import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -32,10 +37,11 @@ import com.example.xyzreader.databinding.ActivityArticleDetailBinding;
 public class ArticleDetailActivity extends AppCompatActivity
         implements LoaderManager.LoaderCallbacks<Cursor> {
     public static final String EXTRA_POSITION = "position";
+    public static final String EXTRA_ID = "id";
 
     private Cursor mCursor;
-    private long mStartId;
-
+    public long mStartId;
+    private int mPosition;
     public long mSelectedItemId;
     private int mSelectedItemUpButtonFloor = Integer.MAX_VALUE;
     private int mTopInset;
@@ -45,12 +51,13 @@ public class ArticleDetailActivity extends AppCompatActivity
     private View mUpButtonContainer;
     private View mUpButton;
     private ActivityArticleDetailBinding binding;
-    private int SelectedIndex;
+    public static int SelectedIndex = -1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             ActivityCompat.postponeEnterTransition(this);
+            ActivityCompat.setEnterSharedElementCallback(this, EnterTransitionCallback);
 
         }
         super.onCreate(savedInstanceState);
@@ -58,7 +65,6 @@ public class ArticleDetailActivity extends AppCompatActivity
             getWindow().getDecorView().setSystemUiVisibility(
                     View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
                             View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
-            ActivityCompat.postponeEnterTransition(this);
         }
         binding = ActivityArticleDetailBinding.inflate(getLayoutInflater());
         View view = binding.getRoot();
@@ -93,6 +99,8 @@ public class ArticleDetailActivity extends AppCompatActivity
                     mCursor.moveToPosition(position);
                 }
                 mSelectedItemId = mCursor.getLong(ArticleLoader.Query._ID);
+
+                mPosition = position;
                 updateUpButtonPosition();
             }
         });
@@ -120,9 +128,13 @@ public class ArticleDetailActivity extends AppCompatActivity
         }
 
         if (savedInstanceState == null) {
-            if (getIntent() != null && getIntent().getData() != null) {
-                mStartId = ItemsContract.Items.getItemId(getIntent().getData());
+        //    if (getIntent() != null && getIntent().getData() != null) {
+//                mStartId = ItemsContract.Items.getItemId(getIntent().getData());
+            if (getIntent() != null){
+                mStartId = getIntent().getLongExtra(EXTRA_ID,0);
+                mPosition = getIntent().getIntExtra(EXTRA_POSITION,0);
                 mSelectedItemId = mStartId;
+
             }
         }
         mPager.addOnPageChangeListener(PageChangeListener);
@@ -139,6 +151,7 @@ public class ArticleDetailActivity extends AppCompatActivity
         @Override
         public void onPageSelected(int position) {
             SelectedIndex = position;
+
         }
 
         @Override
@@ -147,7 +160,23 @@ public class ArticleDetailActivity extends AppCompatActivity
     };
 
 
+    private final SharedElementCallback EnterTransitionCallback = new SharedElementCallback() {
+        @SuppressLint("NewApi")
+        @Override
+        public void onMapSharedElements(List<String> names, Map<String, View> sharedElements) {
+            View view = null;
 
+            if (mPager.getChildCount() > 0) {
+                view = mPagerAdapter.getCurrentView(mPager);
+                FragmentArticleDetailBinding fragmentArticleDetailBinding = FragmentArticleDetailBinding.bind(view);
+                view = fragmentArticleDetailBinding.photo;
+            }
+
+            if (view != null) {
+                sharedElements.put(names.get(0), view);
+            }
+        }
+    };
 
     @Override
     public Loader<Cursor> onCreateLoader(int i, Bundle bundle) {
@@ -158,21 +187,23 @@ public class ArticleDetailActivity extends AppCompatActivity
     public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
         mCursor = cursor;
         mPagerAdapter.notifyDataSetChanged();
-
+        mPager.setCurrentItem( mPosition);
         // Select the start ID
-        if (mStartId > 0) {
+/*        if (mStartId > 0) {
             mCursor.moveToFirst();
             // TODO: optimize
             while (!mCursor.isAfterLast()) {
                 if (mCursor.getLong(ArticleLoader.Query._ID) == mStartId) {
-                    final int position = mCursor.getPosition();
+                   // final int position = mCursor.getPosition();
                     mPager.setCurrentItem(position, false);
                     break;
                 }
                 mCursor.moveToNext();
             }
             mStartId = 0;
-        }
+        }    */
+
+
     }
 
     @Override
@@ -196,8 +227,8 @@ public class ArticleDetailActivity extends AppCompatActivity
 
     @Override
     public void onBackPressed() {
-    //    supportFinishAfterTransition();
-        finish();
+    supportFinishAfterTransition();
+      //  finish();
     }
 
 
@@ -220,6 +251,7 @@ public class ArticleDetailActivity extends AppCompatActivity
         @NonNull
         @Override
         public Object instantiateItem(@NonNull ViewGroup container, int position) {
+            container.setTag(R.id.index,position);
             return super.instantiateItem(container, position);
         }
 

@@ -1,10 +1,12 @@
 package com.example.xyzreader.ui;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.app.ActivityOptions;
 import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.database.Cursor;
@@ -85,6 +87,7 @@ public class ArticleListActivity extends AppCompatActivity implements
     private ActivityArticleListBinding binding;
     private static final String KEY_CURRENT_POSITION = "com.example.xyzreader.key.currentPosition";
     private int currentPosition;
+    private RecyclerViewAdapter adapter;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -146,17 +149,14 @@ public class ArticleListActivity extends AppCompatActivity implements
         @SuppressLint("NewApi")
         @Override
         public void onMapSharedElements(List<String> names, Map<String, View> sharedElements) {
-
-                // Locate the ViewHolder for the clicked position.
-                RecyclerView.ViewHolder selectedViewHolder = mRecyclerView.findViewHolderForAdapterPosition(currentPosition);
-                if (selectedViewHolder == null || selectedViewHolder.itemView == null) {
-                    return;
-                }
-
-                // Map the first shared element name to the child ImageView.
-                sharedElements.put(names.get(0),selectedViewHolder.itemView.findViewById(R.id.thumbnail));
+            if (ArticleDetailActivity.SelectedIndex < 0) {
+                // When transitioning out, use the view already specified in makeSceneTransition
+            } else {
+                // When transitioning back in, use the thumbnail at index the user had swiped to in the pager activity
+                sharedElements.put(names.get(0), adapter.getViewAtIndex(mRecyclerView, ArticleDetailActivity.SelectedIndex));
+                ArticleDetailActivity.SelectedIndex = -1;
             }
-
+        }
     };
 
     @Nullable
@@ -246,7 +246,7 @@ public class ArticleListActivity extends AppCompatActivity implements
 
     @Override
     public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
-        RecyclerViewAdapter adapter = new RecyclerViewAdapter(cursor);
+        adapter = new RecyclerViewAdapter(cursor,this);
         adapter.setHasStableIds(true);
         mRecyclerView.setAdapter(adapter);
         int columnCount = getResources().getInteger(R.integer.list_column_count);
@@ -271,9 +271,12 @@ public class ArticleListActivity extends AppCompatActivity implements
 
     private class RecyclerViewAdapter extends RecyclerView.Adapter<ViewHolder> {
         private Cursor mCursor;
+        private Context mContext;
 
-        public RecyclerViewAdapter(Cursor cursor) {
+        public RecyclerViewAdapter(Cursor cursor, Context context )
+        {
             mCursor = cursor;
+            mContext = context;
         }
 
         @Override
@@ -284,6 +287,7 @@ public class ArticleListActivity extends AppCompatActivity implements
 
         @Override
         public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+
             View view = getLayoutInflater().inflate(R.layout.list_item_article, parent, false);
             final ViewHolder vh = new ViewHolder(view);
             view.setOnClickListener(new View.OnClickListener() {
@@ -291,17 +295,30 @@ public class ArticleListActivity extends AppCompatActivity implements
                 public void onClick(View view) {
                     currentPosition = vh.getAdapterPosition();
                     ListItemArticleBinding binding = ListItemArticleBinding.bind(view);
-                    Intent intent = new Intent(Intent.ACTION_VIEW, ItemsContract.Items.buildItemUri(getItemId(currentPosition)));
+             /*       Intent intent = new Intent(Intent.ACTION_VIEW, ItemsContract.Items.buildItemUri(getItemId(currentPosition)));
                     intent.putExtra(ArticleDetailActivity.EXTRA_POSITION, currentPosition);
                     //intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
 
                         ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(ArticleListActivity.this, binding.thumbnail, binding.thumbnail.getTransitionName());
-                        startActivity( intent,options.toBundle());
+                       // startActivity( intent,options.toBundle());
+                        Activity activity = (Activity)context;
+
+                        ActivityCompat.startActivity(context, intent, options.toBundle());
+
                     } else {
                         startActivity( intent);
                     }
+*/
+                    Intent intent = new Intent(ArticleListActivity.this, ArticleDetailActivity.class);
+                    intent.putExtra(ArticleDetailActivity.EXTRA_POSITION, currentPosition);
+                    intent.putExtra(ArticleDetailActivity.EXTRA_ID, getItemId(currentPosition));
+
+                    ActivityOptionsCompat options = ActivityOptionsCompat.makeSceneTransitionAnimation(ArticleListActivity.this, view, binding.thumbnail.getTransitionName());
+                    ActivityCompat.startActivity(ArticleListActivity.this, intent, options.toBundle());
+
+
                 }
             });
             return vh;
@@ -345,13 +362,30 @@ public class ArticleListActivity extends AppCompatActivity implements
                     ImageLoaderHelper.getInstance(ArticleListActivity.this).getImageLoader());
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                holder.thumbnailView.setTransitionName(getString(R.string.shared_image_transition, getItemId(position),position));   // set a unique Transition Name, using the item ID. I prepend a string to be sure that there will not be any other elements with the same transition name in case I use this code in another larger project
+                holder.thumbnailView.setTransitionName(getString(R.string.shared_image_transition, getItemId(position)));   // set a unique Transition Name, using the position. I prepend a string to be sure that there will not be any other elements with the same transition name in case I use this code in another larger project
             }
         }
 
         @Override
         public int getItemCount() {
             return mCursor.getCount();
+        }
+
+
+        public View getViewAtIndex(RecyclerView recycler, int index) {
+            if (index >= 0) {
+                for (int i=0; i<recycler.getChildCount(); i++) {
+                    View child = recycler.getChildAt(i);
+
+                    int pos = recycler.getChildAdapterPosition(child);
+                    if (pos == index) {
+                        return child;
+                    }
+                }
+            }
+
+            // There is no view for this index - it is offscreen
+            return null;
         }
     }
 
